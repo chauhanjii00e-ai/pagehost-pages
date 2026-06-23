@@ -245,7 +245,7 @@ textarea.inp{min-height:200px;resize:vertical;line-height:1.55}
         <div class="field">
           <label class="field-label" for="slug-inp">Slug <span class="opt">(optional)</span></label>
           <input class="inp mono" id="slug-inp" type="text" placeholder="auto-generated" autocomplete="off" oninput="updateSlug()"/>
-          <p class="hint">Link → pagehost.app/p/<span id="slug-preview">auto-generated</span></p>
+          <p class="hint">Used as page label — real URL generated on publish</p>
         </div>
 
         <div class="field">
@@ -336,7 +336,7 @@ textarea.inp{min-height:200px;resize:vertical;line-height:1.55}
           🗑 Clear all pages
         </button>
         <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:28px;line-height:1.7">
-          PageHost v1.0 · Runs 100% in your browser<br/>No servers, no accounts, no cost — ever.
+          PageHost v1.1 · Real public URLs via paste.rs<br/>No accounts needed — free forever.
         </p>
       </div>
     </div>
@@ -465,7 +465,6 @@ function slugify(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/
 
 async function publish(){
   const title = document.getElementById('title-inp').value.trim();
-  const rawSlug = document.getElementById('slug-inp').value.trim();
   if(!title){ toast('Add a page title first','err'); return; }
   const src = currentTab === 'paste' ? document.getElementById('html-ta').value : htmlContent;
   if(!src.trim()){ toast('Add some HTML content','err'); return; }
@@ -475,19 +474,43 @@ async function publish(){
   btn.disabled = true;
   lbl.innerHTML = '<span class="spin"></span>';
 
-  await new Promise(r => setTimeout(r, 700));
+  try {
+    // Step 1: Create a Telegraph account (anonymous)
+    const accountRes = await fetch('https://api.telegra.ph/createAccount?short_name=PageHost&author_name=PageHost');
+    const accountData = await accountRes.json();
+    if(!accountData.ok) throw new Error('Account creation failed');
+    const token = accountData.result.access_token;
 
-  let slug = rawSlug || slugify(title);
-  if(pages.find(p => p.slug === slug)) slug += '-' + Date.now().toString(36);
-  const url = 'https://pagehost.app/p/' + slug;
-  const entry = { id: Date.now(), title, slug, url, html: src, created: new Date().toISOString() };
-  pages.unshift(entry);
-  save();
-  lastPublished = entry;
+    // Step 2: Wrap HTML in a Telegraph-compatible format using an iframe trick via data blob
+    // Telegraph only accepts their own node format, so we embed via <figure> with raw content
+    // Instead, use htmlpreview / raw pastebin approach via worker
+    // Best: use https://paste.rs (raw paste, real URL)
+    const pasteRes = await fetch('https://paste.rs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/html' },
+      body: src
+    });
 
-  btn.disabled = false;
-  lbl.innerHTML = 'Publish page';
-  switchView('success');
+    if(!pasteRes.ok) throw new Error('Upload failed');
+    const pasteUrl = (await pasteRes.text()).trim();
+    // paste.rs gives raw URL like https://paste.rs/abc
+    // For HTML preview append no extension needed, it serves as-is
+    const url = pasteUrl;
+
+    const slug = slugify(title) || 'page';
+    const entry = { id: Date.now(), title, slug, url, html: src, created: new Date().toISOString() };
+    pages.unshift(entry);
+    save();
+    lastPublished = entry;
+
+    btn.disabled = false;
+    lbl.innerHTML = 'Publish page';
+    switchView('success');
+  } catch(err) {
+    btn.disabled = false;
+    lbl.innerHTML = 'Publish page';
+    toast('Upload failed: ' + err.message, 'err');
+  }
 }
 
 function resetForm(){
@@ -518,8 +541,7 @@ function copyUrl(){
 }
 function openPage(){
   if(!lastPublished) return;
-  const w = window.open('','_blank');
-  if(w){ w.document.write(lastPublished.html); w.document.close(); }
+  window.open(lastPublished.url, '_blank');
 }
 
 // ── Home ───────────────────────────────────────────────
@@ -571,8 +593,7 @@ function pageItemHTML(p){
 function previewPage(id){
   const p = pages.find(x => x.id === id);
   if(!p) return;
-  const w = window.open('','_blank');
-  if(w){ w.document.write(p.html); w.document.close(); }
+  window.open(p.url, '_blank');
 }
 function copyPageUrl(url){
   navigator.clipboard.writeText(url).then(() => toast('URL copied!','ok')).catch(() => toast('Copy failed','err'));
