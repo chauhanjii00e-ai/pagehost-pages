@@ -362,6 +362,30 @@ textarea.inp{min-height:200px;resize:vertical;line-height:1.55}
 
 <script>
 // ── State ──────────────────────────────────────────────
+// ── Viewer mode ─────────────────────────────────────────
+(async function viewerMode(){
+  const params = new URLSearchParams(location.search);
+  const viewId = params.get('view');
+  if(!viewId) return;
+  // Show a loading screen then fetch and display the page
+  document.open();
+  document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#0d0d0f;color:#f0f0f4;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}.sp{width:36px;height:36px;border:3px solid rgba(124,111,255,.3);border-top-color:#7c6fff;border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="sp"></div><p style="font-size:13px;color:#7878a0">Loading page...</p></body></html>`);
+  document.close();
+  try {
+    const r = await fetch('https://api.jsonbin.io/v3/b/' + viewId + '/latest');
+    if(!r.ok) throw new Error('Not found');
+    const d = await r.json();
+    const html = d.record.h;
+    document.open();
+    document.write(html);
+    document.close();
+  } catch(e) {
+    document.open();
+    document.write('<html><body style="font-family:system-ui;padding:40px;color:#ff5c6a">Failed to load page: ' + e.message + '</body></html>');
+    document.close();
+  }
+})();
+
 let pages = JSON.parse(localStorage.getItem('ph_pages') || '[]');
 let settings = JSON.parse(localStorage.getItem('ph_settings') || '{"confirm":true,"autofill":true}');
 let htmlContent = '';
@@ -475,13 +499,19 @@ async function publish(){
   lbl.innerHTML = '<span class="spin"></span>';
 
   try {
-    // Compress and encode HTML into URL hash - no server needed!
-    const compressed = btoa(unescape(encodeURIComponent(src)));
-    const base = 'https://chauhanjii00e-ai.github.io/pagehost-pages/view.html';
-    const url = base + '#' + compressed;
+    // Upload HTML to JSONBin - free, CORS enabled, no account needed
+    const res = await fetch('https://api.jsonbin.io/v3/b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Bin-Private': 'false' },
+      body: JSON.stringify({ t: title, h: src })
+    });
+    if(!res.ok) throw new Error('Upload failed (' + res.status + ')');
+    const data = await res.json();
+    const binId = data.metadata.id;
+    const url = 'https://chauhanjii00e-ai.github.io/pagehost-pages/?view=' + binId;
 
     const slug = slugify(title) || 'page';
-    const entry = { id: Date.now(), title, slug, url, html: src, created: new Date().toISOString() };
+    const entry = { id: Date.now(), title, slug, url, html: src, binId, created: new Date().toISOString() };
     pages.unshift(entry);
     save();
     lastPublished = entry;
@@ -492,7 +522,7 @@ async function publish(){
   } catch(err) {
     btn.disabled = false;
     lbl.innerHTML = 'Publish page';
-    toast('Failed: ' + err.message, 'err');
+    toast('Upload failed: ' + err.message, 'err');
   }
 }
 
