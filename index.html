@@ -511,19 +511,24 @@ async function publish(){
   lbl.innerHTML = '<span class="spin"></span>';
 
   try {
-    // Upload HTML to JSONBin - free, CORS enabled, no account needed
-    const res = await fetch('https://api.jsonbin.io/v3/b', {
+    // Use GitHub Gist API - free, CORS enabled, no account needed for public gists
+    const res = await fetch('https://api.github.com/gists', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Bin-Private': 'false' },
-      body: JSON.stringify({ t: title, h: src })
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' },
+      body: JSON.stringify({
+        description: title,
+        public: true,
+        files: { 'index.html': { content: src } }
+      })
     });
     if(!res.ok) throw new Error('Upload failed (' + res.status + ')');
     const data = await res.json();
-    const binId = data.metadata.id;
-    const url = 'https://chauhanjii00e-ai.github.io/pagehost-pages/?view=' + binId;
+    // Use htmlpreview.github.io to render the gist as a real webpage
+    const rawUrl = data.files['index.html'].raw_url;
+    const url = 'https://htmlpreview.github.io/?' + rawUrl;
 
     const slug = slugify(title) || 'page';
-    const entry = { id: Date.now(), title, slug, url, html: src, binId, created: new Date().toISOString() };
+    const entry = { id: Date.now(), title, slug, url, html: src, gistId: data.id, created: new Date().toISOString() };
     pages.unshift(entry);
     save();
     lastPublished = entry;
@@ -534,7 +539,7 @@ async function publish(){
   } catch(err) {
     btn.disabled = false;
     lbl.innerHTML = 'Publish page';
-    toast('Upload failed: ' + err.message, 'err');
+    toast('Failed: ' + err.message, 'err');
   }
 }
 
