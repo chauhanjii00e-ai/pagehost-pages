@@ -514,7 +514,7 @@ async function publish(){
     // Use GitHub Gist API - free, CORS enabled, no account needed for public gists
     const res = await fetch('https://api.github.com/gists', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json', 'Authorization': 'token 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' },
       body: JSON.stringify({
         description: title,
         public: true,
