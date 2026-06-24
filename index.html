@@ -511,24 +511,12 @@ async function publish(){
   lbl.innerHTML = '<span class="spin"></span>';
 
   try {
-    // Use GitHub Gist API - free, CORS enabled, no account needed for public gists
-    const res = await fetch('https://api.github.com/gists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json', 'Authorization': 'token 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' },
-      body: JSON.stringify({
-        description: title,
-        public: true,
-        files: { 'index.html': { content: src } }
-      })
-    });
-    if(!res.ok) throw new Error('Upload failed (' + res.status + ')');
-    const data = await res.json();
-    // Use htmlpreview.github.io to render the gist as a real webpage
-    const rawUrl = data.files['index.html'].raw_url;
-    const url = 'https://htmlpreview.github.io/?' + rawUrl;
+    // Convert HTML to a data: URL - works in any browser, no server needed!
+    const encoded = btoa(unescape(encodeURIComponent(src)));
+    const url = 'data:text/html;base64,' + encoded;
 
     const slug = slugify(title) || 'page';
-    const entry = { id: Date.now(), title, slug, url, html: src, gistId: data.id, created: new Date().toISOString() };
+    const entry = { id: Date.now(), title, slug, url, html: src, created: new Date().toISOString() };
     pages.unshift(entry);
     save();
     lastPublished = entry;
