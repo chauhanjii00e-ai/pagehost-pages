@@ -15,23 +15,16 @@
 <div class="spinner" id="spinner"></div>
 <p id="msg" style="font-size:13px;color:#7878a0">Loading your page...</p>
 <script>
-(async () => {
-  const params = new URLSearchParams(location.search);
-  const id = params.get('id');
-  if (!id) {
-    document.getElementById('spinner').style.display = 'none';
-    document.getElementById('msg').innerHTML = '<span class="err">No page ID provided.</span>';
-    return;
-  }
+(function() {
   try {
-    const res = await fetch('https://api.jsonbin.io/v3/b/' + id + '/latest', {
-      headers: { 'X-Access-Key': '' }
-    });
-    if (!res.ok) throw new Error('Failed to load (status ' + res.status + ')');
-    const data = await res.json();
-    const html = data.record.html;
-    if (!html) throw new Error('No HTML content found');
-    // Replace the entire page with the stored HTML
+    const hash = location.hash.slice(1);
+    if (!hash) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('msg').innerHTML = '<span class="err">No page content found in URL.</span>';
+      return;
+    }
+    // Decode base64 back to HTML
+    const html = decodeURIComponent(escape(atob(hash)));
     document.open();
     document.write(html);
     document.close();
